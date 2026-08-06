@@ -91,7 +91,7 @@ export async function logout() {
 
 // 프로필 수정
 export function updateMyProfile(profileData) {
-  return api.put("/api/users/me/profile", profileData);
+  return api.put("/api/user/me", profileData);
 }
 
 export default api;

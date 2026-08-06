@@ -75,5 +75,6 @@ export const useAuthStore = defineStore("auth", () => {
     loadUser,
     logout,
     clearUser,
+    updateProfile,
   };
 });
