@@ -16,7 +16,11 @@ coverage/
 # Environment variables
 .env
 .env.*
+<<<<<<< HEAD
 !.env.example
+=======
+!.env
+>>>>>>> 57e716e (Initial commit)
 *.local
 
 # OS files
