@@ -4,6 +4,7 @@ import { defineStore } from "pinia";
 import {
   fetchMe,
   logout as requestLogout,
+  updateMyProfile,
 } from "@/user/api/auth";
 
 export const useAuthStore = defineStore("auth", () => {
@@ -56,6 +57,15 @@ export const useAuthStore = defineStore("auth", () => {
     localStorage.removeItem("tokenType");
 
     user.value = null;
+  }
+
+  // 프로필 수정
+  async function updateProfile(profileData) {
+    const response = await updateMyProfile(profileData);
+
+    user.value = response.data;
+
+    return response.data;
   }
 
   return {

@@ -23,6 +23,21 @@ const userProfile = computed(() => auth.user);
 // 기본 탭 : 관심 동네
 const tab = ref("neighborhoods");
 
+// 프로필 수정
+async function handleProfileSave(payload) {
+  const { nickname, resolve, reject } = payload;
+
+  try {
+    await auth.updateProfile({
+      nickname,
+    });
+
+    resolve();
+  } catch (error) {
+    reject(error);
+  }
+}
+
 const editingReview = ref(null);
 
 const myReviews = computed(() => {
@@ -108,7 +123,7 @@ function deleteReview(id) {
       <UserProfileSummary
         v-if="userProfile"
         :user-profile="userProfile"
-        @save="updateNickname"
+        @save="handleProfileSave"
       />
 
       <div
