@@ -2,6 +2,7 @@
 import { computed, reactive, ref } from "vue";
 import { Check, X } from "lucide-vue-next";
 import StarInput from "../../common/components/StarInput.vue";
+import StarDisplay from "../../common/components/StarDisplay.vue";
 import { REVIEW_CATEGORIES, CATEGORY_LABEL_TO_CODE } from "../constants.js";
 import { createReview } from "../api/review.js";
 
@@ -22,7 +23,6 @@ const emit = defineEmits([
   "created",
 ]);
 
-const overallRating = ref(0);
 const content = ref("");
 const isAnonymous = ref(false);
 
@@ -47,6 +47,25 @@ const hasAllCategoryRatings = computed(() => {
 
     return score >= 1 && score <= 5;
   });
+});
+
+/*
+ * [수정] "총 별점"을 항목별 별점과 무관하게 따로 입력받다 보니,
+ * 항목별 별점 평균과 화면에 표시되는 종합 평점이 서로 어긋나는
+ * (예: 항목별 평균 3.2점인데 종합 평점은 2.0점) 문제가 있었다.
+ * 종합 평점은 항목별 별점 5개의 평균을 반올림해 자동으로 계산한다.
+ */
+const overallRating = computed(() => {
+  if (!hasAllCategoryRatings.value) {
+    return 0;
+  }
+
+  const sum = REVIEW_CATEGORIES.reduce(
+    (acc, category) => acc + catRatings[category],
+    0,
+  );
+
+  return Math.round(sum / REVIEW_CATEGORIES.length);
 });
 
 /*
@@ -158,25 +177,22 @@ const handleSubmit = async () => {
 
 <template>
   <Teleport to="body">
-    <!-- 화면 전체 모달 영역 -->
+    <!--
+      화면 중앙에 뜨는 모달 영역
+
+      [수정] 배경(오버레이)을 클릭하면 모달이 바로 닫혀서, 리뷰를 작성하던 중
+      실수로 배경을 클릭하면 입력 내용이 통째로 사라지는 문제가 있었다.
+      배경 클릭으로는 닫히지 않고, 우측 상단 X 버튼으로만 닫히도록 한다.
+    -->
     <div
-      class="fixed inset-0 z-[9999]"
+      class="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4"
       role="dialog"
       aria-modal="true"
       aria-labelledby="review-modal-title"
     >
-      <!-- 배경 오버레이 -->
-      <button
-        type="button"
-        class="absolute inset-0 h-full w-full cursor-default bg-black/40"
-        aria-label="리뷰 작성 창 닫기"
-        @click="emit('close')"
-      />
-
       <!-- 리뷰 작성 패널 -->
       <section
-        class="absolute inset-y-0 left-0 flex w-full max-w-[574px] flex-col overflow-hidden bg-background shadow-2xl"
-        @click.stop
+        class="flex w-full max-w-[574px] max-h-[85vh] flex-col overflow-hidden rounded-2xl border border-border bg-background shadow-2xl"
       >
         <!-- 헤더 -->
         <div
@@ -249,31 +265,6 @@ const handleSubmit = async () => {
             v-else
             class="space-y-6 p-6"
           >
-            <!-- 총 별점 -->
-            <div>
-              <label
-                class="mb-3 block text-sm font-semibold text-foreground"
-              >
-                총 별점
-                <span class="text-red-500">*</span>
-              </label>
-
-              <div class="flex items-center gap-3">
-                <StarInput
-                  v-model="overallRating"
-                  :size="30"
-                />
-
-                <span class="text-xl font-bold text-foreground">
-                  {{
-                    overallRating > 0
-                      ? `${overallRating}.0`
-                      : "—"
-                  }}
-                </span>
-              </div>
-            </div>
-
             <!-- 항목별 별점 -->
             <div>
               <label
@@ -312,6 +303,39 @@ const handleSubmit = async () => {
                   </span>
                 </div>
               </div>
+            </div>
+
+            <!--
+              총 별점
+
+              [수정] 항목별 별점과 별개로 직접 입력받지 않고,
+              항목별 별점 5개의 평균으로 자동 계산해서 보여준다.
+            -->
+            <div>
+              <label
+                class="mb-3 block text-sm font-semibold text-foreground"
+              >
+                종합 평점
+              </label>
+
+              <div class="flex items-center gap-3">
+                <StarDisplay
+                  :rating="overallRating"
+                  :size="30"
+                />
+
+                <span class="text-xl font-bold text-foreground">
+                  {{
+                    overallRating > 0
+                      ? `${overallRating}.0`
+                      : "—"
+                  }}
+                </span>
+              </div>
+
+              <p class="mt-1.5 text-xs text-muted-foreground">
+                항목별 별점의 평균으로 자동 계산돼요.
+              </p>
             </div>
 
             <!-- 리뷰 내용 -->

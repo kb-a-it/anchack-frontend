@@ -1,6 +1,8 @@
 <script setup>
 import { ref } from "vue";
+import { ThumbsUp, ThumbsDown } from "lucide-vue-next";
 import StarDisplay from "../../common/components/StarDisplay.vue";
+import { reactToReview } from "../api/review.js";
 
 const props = defineProps({
   review: { type: Object, required: true },
@@ -15,6 +17,44 @@ const reportReason = ref("");
 function submitReport() {
   reported.value = true;
   showReportModal.value = false;
+}
+
+/*
+ * 좋아요 / 싫어요
+ *
+ * 서버가 실제 카운트/내 반응 상태를 다시 내려주므로 그 값을 그대로 반영한다
+ * (낙관적으로 먼저 화면을 바꾸지 않아서, 실패해도 화면이 어긋나지 않는다).
+ */
+const likeCount = ref(props.review.likeCount ?? 0);
+const dislikeCount = ref(props.review.dislikeCount ?? 0);
+const myReaction = ref(props.review.myReaction ?? null);
+const reactionError = ref("");
+const reacting = ref(false);
+
+async function react(reactionType) {
+  if (reacting.value) return;
+
+  const reviewId = props.review.reviewId ?? props.review.id;
+
+  reacting.value = true;
+  reactionError.value = "";
+
+  try {
+    const response = await reactToReview(reviewId, reactionType);
+
+    likeCount.value = response.data.likeCount;
+    dislikeCount.value = response.data.dislikeCount;
+    myReaction.value = response.data.myReaction;
+  } catch (error) {
+    if (error.response?.status === 401) {
+      reactionError.value = "로그인 후 이용할 수 있어요.";
+    } else {
+      reactionError.value =
+        error.response?.data?.message || "반응을 처리하지 못했어요.";
+    }
+  } finally {
+    reacting.value = false;
+  }
 }
 </script>
 
@@ -70,6 +110,41 @@ function submitReport() {
         <span class="text-xs text-muted-foreground w-12 flex-shrink-0">{{ cat }}</span>
         <StarDisplay :rating="val" :size="11" />
       </div>
+    </div>
+
+    <!-- 좋아요 / 싫어요 -->
+    <div class="flex items-center gap-2 pt-3 mt-3 border-t border-border/60">
+      <button
+        type="button"
+        :disabled="reacting"
+        @click="react('LIKE')"
+        :class="[
+          'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+          myReaction === 'LIKE'
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-secondary text-muted-foreground hover:text-primary',
+        ]"
+      >
+        <ThumbsUp :size="13" />
+        좋아요 {{ likeCount }}
+      </button>
+
+      <button
+        type="button"
+        :disabled="reacting"
+        @click="react('DISLIKE')"
+        :class="[
+          'flex items-center gap-1.5 rounded-full px-3 py-1.5 text-xs font-semibold transition-colors disabled:opacity-50',
+          myReaction === 'DISLIKE'
+            ? 'bg-red-500 text-white'
+            : 'bg-secondary text-muted-foreground hover:text-red-500',
+        ]"
+      >
+        <ThumbsDown :size="13" />
+        싫어요 {{ dislikeCount }}
+      </button>
+
+      <span v-if="reactionError" class="text-xs text-red-500 ml-1">{{ reactionError }}</span>
     </div>
   </div>
 </template>

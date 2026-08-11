@@ -18,5 +18,10 @@ export const createReview = (payload) => api.post("/reviews", payload);
 export const updateReview = (id, payload) => api.put(`/reviews/${id}`, payload);
 export const deleteReview = (id) => api.delete(`/reviews/${id}`);
 
+// 리뷰 좋아요 / 싫어요. reactionType: "LIKE" | "DISLIKE"
+// 같은 반응을 다시 보내면 서버에서 취소 처리된다.
+export const reactToReview = (reviewId, reactionType) =>
+  api.post(`/reviews/${reviewId}/reactions`, { reactionType });
+
 // 리뷰 신고
 export const reportReview = (reviewId, reason) => api.post(`/reviews/${reviewId}/reports`, { reason });

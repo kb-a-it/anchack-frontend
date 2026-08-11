@@ -60,6 +60,16 @@ api.interceptors.response.use(
     if (status === 401 && !isLoginRequest) {
       localStorage.removeItem("accessToken");
       localStorage.removeItem("tokenType");
+
+      // common/api/axios.js와 동일하게, 토큰을 지울 때 pinia auth 스토어도
+      // 즉시 로그아웃 상태로 맞춰서 헤더가 "로그인됨"으로 잘못 표시되지 않게 한다.
+      import("../stores/useAuthStore")
+        .then(({ useAuthStore }) => {
+          useAuthStore().clearUser();
+        })
+        .catch(() => {
+          // 스토어를 불러오지 못해도 토큰 정리는 이미 끝난 상태이므로 무시한다.
+        });
     }
 
     return Promise.reject(error);

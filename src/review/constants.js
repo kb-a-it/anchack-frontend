@@ -13,17 +13,58 @@ export const CATEGORY_CODE_TO_LABEL = {
   TRANSIT: "교통",
 };
 
-// 화면에 표시할 항목별 별점 라벨 목록 (한글)
+// 화면에 표시할 항목별 별점 라벨 목록
 export const REVIEW_CATEGORIES = Object.values(CATEGORY_CODE_TO_LABEL);
 
-// 한글 라벨 -> 백엔드 카테고리 코드 역매핑 (예: "소음" -> "NOISE")
+// 한글 라벨 -> 백엔드 카테고리 코드 역매핑
+// 예: "소음" -> "NOISE"
 export const CATEGORY_LABEL_TO_CODE = Object.fromEntries(
-  Object.entries(CATEGORY_CODE_TO_LABEL).map(([code, label]) => [label, code]),
+  Object.entries(CATEGORY_CODE_TO_LABEL).map(([code, label]) => [
+    label,
+    code,
+  ]),
 );
 
 /*
- * 백엔드 ReviewResponse를 화면(ReviewCard/TabReview/MyReviewList/ReviewEditModal)이
- * 기존에 쓰던 형태로 변환한다.
+ * 백엔드에서 전달된 리뷰 작성일을 화면 표시 형식으로 변환한다.
+ *
+ * 지원 형식:
+ * - "2026-08-01T12:00:00"
+ * - [2026, 8, 1, 12, 0, 0]
+ *
+ * 반환 형식:
+ * - "2026.08.01"
+ */
+function formatReviewDate(createdAt) {
+  if (!createdAt) {
+    return "";
+  }
+
+  // Java LocalDateTime이 배열로 직렬화된 경우
+  if (Array.isArray(createdAt)) {
+    const [year, month, day] = createdAt;
+
+    if (year == null || month == null || day == null) {
+      return "";
+    }
+
+    return [
+      String(year),
+      String(month).padStart(2, "0"),
+      String(day).padStart(2, "0"),
+    ].join(".");
+  }
+
+  // ISO 문자열로 전달된 경우
+  if (typeof createdAt === "string") {
+    return createdAt.slice(0, 10).replaceAll("-", ".");
+  }
+
+  return "";
+}
+
+/*
+ * 백엔드 ReviewResponse를 화면에서 사용하는 리뷰 형태로 변환한다.
  *
  * 실제 API 응답 예시:
  * {
@@ -37,7 +78,13 @@ export const CATEGORY_LABEL_TO_CODE = Object.fromEntries(
  *   status: "ACTIVE",
  *   writerId: 3,
  *   writerNickname: "홍길동",
- *   categoryScores: { NOISE: 4, CLEANLINESS: 5, SAFETY: 4, ATMOSPHERE: 4, TRANSIT: 3 },
+ *   categoryScores: {
+ *     NOISE: 4,
+ *     CLEANLINESS: 5,
+ *     SAFETY: 4,
+ *     ATMOSPHERE: 4,
+ *     TRANSIT: 3,
+ *   },
  *   createdAt: "2026-08-01T12:00:00",
  *   updatedAt: "2026-08-01T12:00:00",
  * }
@@ -45,24 +92,32 @@ export const CATEGORY_LABEL_TO_CODE = Object.fromEntries(
 export function mapReviewResponse(apiReview) {
   const ratings = {};
 
-  Object.entries(apiReview.categoryScores || {}).forEach(([code, score]) => {
-    const label = CATEGORY_CODE_TO_LABEL[code] || code;
-    ratings[label] = score;
-  });
+  Object.entries(apiReview?.categoryScores || {}).forEach(
+    ([code, score]) => {
+      const label = CATEGORY_CODE_TO_LABEL[code] || code;
+      ratings[label] = score;
+    },
+  );
 
   return {
-    id: apiReview.reviewId,
-    reviewId: apiReview.reviewId,
-    adminDongId: apiReview.adminDongId,
-    district: apiReview.guName || "",
-    dong: apiReview.adminDongName || "",
-    author: apiReview.anonymous ? "익명" : apiReview.writerNickname || "익명",
-    date: (apiReview.createdAt || "").slice(0, 10).replaceAll("-", "."),
-    overallRating: apiReview.overallRating,
-    content: apiReview.content,
-    anonymous: !!apiReview.anonymous,
-    status: apiReview.status,
-    writerId: apiReview.writerId,
+    id: apiReview?.reviewId,
+    reviewId: apiReview?.reviewId,
+    adminDongId: apiReview?.adminDongId,
+    district: apiReview?.guName || "",
+    dong: apiReview?.adminDongName || "",
+    author: apiReview?.anonymous
+      ? "익명"
+      : apiReview?.writerNickname || "익명",
+    date: formatReviewDate(apiReview?.createdAt),
+    overallRating: apiReview?.overallRating,
+    content: apiReview?.content || "",
+    anonymous: Boolean(apiReview?.anonymous),
+    status: apiReview?.status,
+    writerId: apiReview?.writerId,
+    // 좋아요/싫어요
+    likeCount: apiReview?.likeCount ?? 0,
+    dislikeCount: apiReview?.dislikeCount ?? 0,
+    myReaction: apiReview?.myReaction ?? null,
     ratings,
   };
 }

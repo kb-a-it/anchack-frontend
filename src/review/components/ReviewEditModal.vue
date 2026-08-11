@@ -2,6 +2,7 @@
 import { ref, computed } from "vue";
 import { X } from "lucide-vue-next";
 import StarInput from "../../common/components/StarInput.vue";
+import StarDisplay from "../../common/components/StarDisplay.vue";
 import { REVIEW_CATEGORIES, CATEGORY_LABEL_TO_CODE } from "../constants.js";
 import { updateReview } from "../api/review.js";
 
@@ -10,7 +11,6 @@ const props = defineProps({
 });
 const emit = defineEmits(["close", "updated"]);
 
-const overallRating = ref(props.review.overallRating);
 const catRatings = ref({ ...props.review.ratings });
 const content = ref(props.review.content);
 const isAnonymous = ref(!!props.review.anonymous);
@@ -24,6 +24,25 @@ const hasAllCategoryRatings = computed(() =>
     return score >= 1 && score <= 5;
   }),
 );
+
+/*
+ * [수정] 기존에는 "총 별점"을 항목별 별점과 무관하게 별도로 입력받아서,
+ * 항목별 별점의 평균과 화면에 표시되는 종합 평점이 서로 다르게 나오는
+ * (예: 항목별 평균은 3.2점인데 종합 평점은 2.0점으로 표시) 문제가 있었다.
+ * 종합 평점은 항목별 별점 5개의 평균을 반올림해 자동으로 계산한다.
+ */
+const overallRating = computed(() => {
+  if (!hasAllCategoryRatings.value) {
+    return 0;
+  }
+
+  const sum = REVIEW_CATEGORIES.reduce(
+    (acc, category) => acc + catRatings.value[category],
+    0,
+  );
+
+  return Math.round(sum / REVIEW_CATEGORIES.length);
+});
 
 const canSave = computed(
   () =>
@@ -87,7 +106,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" @click="emit('close')">
+  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
     <div class="bg-card w-full max-w-[520px] max-h-[85vh] overflow-y-auto rounded-2xl shadow-2xl border border-border" @click.stop>
       <div class="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10">
         <div>
@@ -100,11 +119,12 @@ async function save() {
       </div>
       <div class="p-6 space-y-6">
         <div>
-          <label class="block text-sm font-semibold text-foreground mb-3">총 별점 <span class="text-red-500">*</span></label>
+          <label class="block text-sm font-semibold text-foreground mb-3">종합 평점</label>
           <div class="flex items-center gap-3">
-            <StarInput v-model="overallRating" :size="30" />
+            <StarDisplay :rating="overallRating" :size="30" />
             <span class="text-xl font-bold text-foreground">{{ overallRating > 0 ? `${overallRating}.0` : "—" }}</span>
           </div>
+          <p class="mt-1.5 text-xs text-muted-foreground">항목별 별점의 평균으로 자동 계산돼요.</p>
         </div>
 
         <div>

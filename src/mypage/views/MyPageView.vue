@@ -1,9 +1,14 @@
 <script setup>
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 
 import { useAuthStore } from "../../user/stores/useAuthStore";
 import { useMyPageStore } from "../stores/useMyPageStore";
+import {
+  getMyReviews,
+  deleteReview as deleteReviewApi,
+} from "../../review/api/review.js";
+import { mapReviewResponse } from "../../review/constants.js";
 
 import TheFooter from "../../common/components/TheFooter.vue";
 import UserProfileSummary from "../../user/components/UserProfileSummary.vue";
@@ -12,6 +17,7 @@ import SavedNeighborhoodList from "../../region/components/SavedNeighborhoodList
 import SavedConditionList from "../../condition/components/SavedConditionList.vue";
 import MyReviewList from "../../review/components/MyReviewList.vue";
 import ReviewEditModal from "../../review/components/ReviewEditModal.vue";
+import BaseToast from "../../common/components/BaseToast.vue";
 
 const router = useRouter();
 
@@ -24,9 +30,39 @@ const userProfile = computed(() => auth.user);
 const tab = ref("neighborhoods");
 
 const editingReview = ref(null);
+const toast = ref(null);
+
+/*
+ * [수정] 기존에는 mypage.allReviews(mock 데이터)를 그대로 보여줘서
+ * 실제로 ExploreView에서 작성한 리뷰가 마이페이지에는 반영되지 않았다.
+ * GET /api/reviews/me로 로그인한 사용자가 실제로 작성한 리뷰만 불러온다.
+ */
+const myReviewList = ref([]);
+const reviewsLoading = ref(false);
+
+async function loadMyReviews() {
+  reviewsLoading.value = true;
+
+  try {
+    const response = await getMyReviews();
+    myReviewList.value = response.data.map(mapReviewResponse);
+  } catch (error) {
+    console.error(
+      "내가 쓴 리뷰를 불러오지 못했습니다:",
+      error.response?.data || error,
+    );
+    myReviewList.value = [];
+  } finally {
+    reviewsLoading.value = false;
+  }
+}
+
+onMounted(() => {
+  loadMyReviews();
+});
 
 const myReviews = computed(() => {
-  return mypage.allReviews.slice(0, 20);
+  return myReviewList.value.slice(0, 20);
 });
 
 const tabs = computed(() => [
@@ -83,15 +119,51 @@ function updateNickname(updatedUser) {
   });
 }
 
-function saveReview(updatedReview) {
-  mypage.updateReview(updatedReview);
+function saveReview(updatedApiReview) {
+  const mapped = mapReviewResponse(updatedApiReview);
+  const idx = myReviewList.value.findIndex(
+    (review) => review.reviewId === mapped.reviewId,
+  );
+
+  if (idx >= 0) {
+    myReviewList.value[idx] = mapped;
+  }
+
   editingReview.value = null;
+  toast.value = "리뷰가 수정되었습니다.";
 }
 
-function deleteReview(id) {
-  mypage.allReviews = mypage.allReviews.filter(
-    (review) => review.id !== id,
+/*
+ * [수정] 기존에는 로컬 mock 배열에서만 지워서 실제 DB에는 리뷰가 그대로 남아있었다.
+ * 실제 DELETE /api/reviews/{id}를 호출해 서버 상태(status=DELETED)까지 반영한다.
+ *
+ * [수정] 삭제 버튼을 누르면 바로 삭제되던 것을 방지하기 위해,
+ * 실제 삭제 요청 전에 confirm으로 한 번 더 확인받는다.
+ */
+async function deleteReview(id) {
+  const confirmed = window.confirm(
+    "정말 이 리뷰를 삭제하시겠어요? 삭제한 리뷰는 복구할 수 없습니다.",
   );
+
+  if (!confirmed) {
+    return;
+  }
+
+  try {
+    await deleteReviewApi(id);
+
+    myReviewList.value = myReviewList.value.filter(
+      (review) => review.id !== id,
+    );
+
+    toast.value = "리뷰가 삭제되었습니다.";
+  } catch (error) {
+    console.error("리뷰 삭제 실패:", error.response?.data || error);
+
+    toast.value =
+      error.response?.data?.message ||
+      "리뷰 삭제에 실패했습니다. 잠시 후 다시 시도해주세요.";
+  }
 }
 </script>
 
@@ -101,8 +173,10 @@ function deleteReview(id) {
       v-if="editingReview"
       :review="editingReview"
       @close="editingReview = null"
-      @save="saveReview"
+      @updated="saveReview"
     />
+
+    <BaseToast v-if="toast" :message="toast" @done="toast = null" />
 
     <div class="border-b border-border bg-white">
       <UserProfileSummary

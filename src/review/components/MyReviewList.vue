@@ -24,6 +24,8 @@ const emit = defineEmits(["navigate", "edit", "delete"]);
           <div class="flex items-center gap-2 flex-wrap">
             <span class="text-xs font-bold text-primary bg-secondary px-2.5 py-1 rounded-full">{{ r.district }} {{ r.dong }}</span>
             <span class="text-xs text-muted-foreground">{{ r.date }}</span>
+            <!-- 익명으로 작성된 리뷰인지 표시. 다른 사용자에게는 닉네임 대신 "익명"으로 보인다는 걸 본인도 확인할 수 있게 -->
+            <span v-if="r.anonymous" class="text-xs font-semibold text-muted-foreground bg-muted px-2 py-0.5 rounded-full">익명 공개</span>
           </div>
           <div class="flex items-center gap-1 flex-shrink-0 ml-3">
             <button @click="emit('edit', r)" class="flex items-center gap-1 text-xs font-semibold text-muted-foreground hover:text-primary px-2.5 py-1.5 rounded-lg hover:bg-secondary transition-colors">수정</button>
