@@ -33,7 +33,7 @@ const submitError = ref("");
 const catRatings = reactive({
   소음: 0,
   청결: 0,
-  안전: 0,
+  치안: 0,
   분위기: 0,
   교통: 0,
 });

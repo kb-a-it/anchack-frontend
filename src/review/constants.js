@@ -8,7 +8,7 @@
 export const CATEGORY_CODE_TO_LABEL = {
   NOISE: "소음",
   CLEANLINESS: "청결",
-  SAFETY: "안전",
+  SAFETY: "치안",
   ATMOSPHERE: "분위기",
   TRANSIT: "교통",
 };
