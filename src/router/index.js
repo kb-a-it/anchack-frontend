@@ -28,4 +28,27 @@ const router = createRouter({
   routes,
 })
 
+router.beforeEach((to) => {
+  const accessToken = localStorage.getItem("accessToken");
+
+  const guestOnlyPages = [
+    "/login",
+    "/signup",
+  ];
+
+  if (
+    accessToken &&
+    guestOnlyPages.includes(to.path)
+  ) {
+    alert("이미 로그인한 사용자입니다.");
+
+    return {
+      path: "/",
+      replace: true,
+    };
+  }
+
+  return true;
+});
+
 export default router

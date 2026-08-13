@@ -5,14 +5,16 @@ import { useAuthStore } from './user/stores/useAuthStore'
 
 const auth = useAuthStore()
 
-/*
- * 앱이 처음 실행될 때 저장된 토큰을 확인하고
- * 사용자 정보를 불러와 로그인 상태를 유지한다.
- */
+// 새로고침 또는 앱 재접속 시 로그인 사용자 정보 복구
 onMounted(() => {
-  auth.loadUser().catch(() => {
-    // 토큰이 만료되거나 유효하지 않으면
-    // loadUser 내부에서 로그아웃 처리된다.
+  const accessToken = localStorage.getItem('accessToken')
+
+  if (!accessToken) {
+    return
+  }
+
+  auth.loadUser().catch((error) => {
+    console.error('로그인 사용자 정보를 불러오지 못했습니다.', error)
   })
 })
 </script>
