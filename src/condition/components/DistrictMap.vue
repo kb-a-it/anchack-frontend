@@ -1,6 +1,7 @@
 <script setup>
-import { ref, watch, onMounted } from 'vue'
+import { ref, watch, onMounted, onBeforeUnmount } from 'vue'
 import { X } from 'lucide-vue-next'
+import { loadSeoulGeojson } from '@/common/utils/loadSeoulGeojson.js'
 
 const props = defineProps({
   modelValue: { type: Array, required: true },
@@ -13,6 +14,10 @@ let districtPolygonMap = {}
 let originalPolygonColors = {}
 let complementaryPolygonColors = {}
 let kakaoMapInstance = null
+
+// document.getElementById('step-map') 하드코딩(ResultMap.vue와 같은 id를 써서
+// 충돌 위험이 있었음) 대신 template ref 사용
+const mapContainer = ref(null)
 
 const RAINBOW_25_COLORS = [
   '#FF0000',
@@ -114,6 +119,14 @@ onMounted(() => {
   loadKakaoMapScript()
 })
 
+onBeforeUnmount(() => {
+  // 페이지/스텝을 벗어난 뒤에도 지도 인스턴스·폴리곤이 남아 계속 타일을
+  // 요청하는 것을 막는다.
+  Object.values(districtPolygonMap).forEach((polygon) => polygon.setMap(null))
+  districtPolygonMap = {}
+  kakaoMapInstance = null
+})
+
 function loadKakaoMapScript() {
   if (window.kakao && window.kakao.maps) {
     window.kakao.maps.load(initMap)
@@ -132,13 +145,15 @@ function loadKakaoMapScript() {
 }
 
 function initMap() {
-  const container = document.getElementById('step-map')
+  const container = mapContainer.value
   if (!container) return
 
   districtPolygonMap = {}
   originalPolygonColors = {}
   complementaryPolygonColors = {}
 
+  // 카카오맵 지도 레벨은 정수(1~14)만 지원한다. 소수점 레벨(9.4 등)을 넘기면
+  // 타일 요청 URL이 존재하지 않는 경로가 되어 타일 서버가 전부 400을 반환한다.
   const map = new window.kakao.maps.Map(container, {
     center: new window.kakao.maps.LatLng(37.5665, 126.978),
     level: 9.4,
@@ -148,16 +163,15 @@ function initMap() {
   map.setZoomable(false)
   map.setDraggable(false)
 
+  // 카카오맵 이용약관상 로고/저작권 표기는 항상 노출되어야 하므로,
+  // DOM에서 임의로 지우지 않고 공식 API로 위치만 조정한다.
+  map.setCopyrightPosition(window.kakao.maps.CopyrightPosition.BOTTOMRIGHT, true)
+
   setTimeout(() => {
     map.relayout()
-    const unwantedElements = container.querySelectorAll(
-      'a[href*="kakao.com"], img[src*="kakao"], div[style*="position: absolute"][style*="left: 0px"][style*="bottom: 0px"], .r_layer, .dacr',
-    )
-    unwantedElements.forEach((el) => el.remove())
   }, 100)
 
-  fetch('/seoul_dong.geojson')
-    .then((response) => response.json())
+  loadSeoulGeojson()
     .then((geojson) => {
       if (!geojson || !geojson.features) return
 
@@ -296,7 +310,7 @@ function initMap() {
       }}
     </div>
 
-    <div id="step-map" class="w-full rounded-xl overflow-hidden" style="height: 360px"></div>
+    <div ref="mapContainer" class="w-full rounded-xl overflow-hidden" style="height: 360px"></div>
 
     <div class="flex items-center justify-between mt-3">
       <div class="flex flex-wrap gap-2">

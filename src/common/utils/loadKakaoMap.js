@@ -12,12 +12,12 @@ export const loadKakaoMap = () => {
   }
 
   kakaoMapPromise = new Promise((resolve, reject) => {
-    const appKey = import.meta.env.VITE_KAKAO_MAP_JAVASCRIPT_KEY;
+    const appKey = import.meta.env.VITE_KAKAO_JS_KEY;
 
     if (!appKey) {
       reject(
         new Error(
-          "VITE_KAKAO_MAP_JAVASCRIPT_KEY 환경변수가 설정되지 않았습니다."
+          "VITE_KAKAO_JS_KEY 환경변수가 설정되지 않았습니다."
         )
       );
       return;

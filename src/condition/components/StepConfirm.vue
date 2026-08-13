@@ -1,7 +1,6 @@
 <script setup>
 import { ref, computed } from "vue";
 import { Search } from "lucide-vue-next";
-import SearchProgressBar from "./SearchProgressBar.vue";
 import AddressSearchModal from "./AddressSearchModal.vue";
 import DistrictMap from "./DistrictMap.vue";
 import BoxChip from "./BoxChip.vue";
@@ -46,18 +45,9 @@ function selectAddress(name, address) {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background pt-[60px]">
-    <div class="max-w-[800px] mx-auto px-8 py-10">
-      <AddressSearchModal v-if="modal" @close="modal = false" @select="selectAddress" />
+  <AddressSearchModal v-if="modal" @close="modal = false" @select="selectAddress" />
 
-      <div class="mb-8">
-        <SearchProgressBar :step="5" :total="5" />
-        <div class="flex justify-between mt-2.5">
-          <span class="text-sm font-semibold text-primary">5/5 입력한 조건을 확인해주세요</span>
-          <span class="text-sm text-muted-foreground">약 1분이면 완료돼요</span>
-        </div>
-      </div>
-      <h1 class="text-[28px] font-bold text-foreground mb-8">입력한 조건을 확인해주세요</h1>
+  <h1 class="text-[28px] font-bold text-foreground mb-8">입력한 조건을 확인해주세요</h1>
 
       <div class="space-y-4 mb-10">
         <InlineEditSection
@@ -198,6 +188,4 @@ function selectAddress(name, address) {
         <button @click="emit('prev')" class="text-sm text-muted-foreground">이전</button>
         <button @click="emit('submit')" class="bg-primary text-primary-foreground px-10 py-3.5 rounded-full font-semibold">동네 찾기 시작</button>
       </div>
-    </div>
-  </div>
 </template>

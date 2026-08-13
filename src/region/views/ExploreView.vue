@@ -1,10 +1,11 @@
 <script setup>
-import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { Check, ChevronLeft, ChevronRight, Map } from 'lucide-vue-next'
 import ExploreHeader from '@/region/components/ExploreHeader.vue'
 import ExploreTabs from '@/region/components/ExploreTabs.vue'
 import ReviewWriteModal from '@/review/components/ReviewWriteModal.vue'
+import { loadSeoulGeojson } from '@/common/utils/loadSeoulGeojson.js'
 import StarDisplay from '@/common/components/StarDisplay.vue'
 import BaseToast from '@/common/components/BaseToast.vue'
 import TheFooter from '@/common/components/TheFooter.vue'
@@ -135,7 +136,8 @@ function toggleSaveDong() {
 // 리뷰 작성 모달을 열기 전, 실제 admin_dong_id가 준비되었는지 확인한다.
 function openReviewForm() {
   if (!adminDong.value) {
-    saveToast.value = reviewsError.value || '동네 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.'
+    saveToast.value =
+      reviewsError.value || '동네 정보를 불러오는 중이에요. 잠시 후 다시 시도해주세요.'
     return
   }
   showReviewForm.value = true
@@ -219,6 +221,10 @@ function getComplementaryColor(hex) {
 let dongPolygonMap = {}
 let originalPolygonColors = {}
 let complementaryPolygonColors = {}
+let kakaoMapInstance = null
+
+// document.getElementById('map') 하드코딩 대신 template ref 사용
+const mapContainer = ref(null)
 const hoveredDongName = ref(null)
 
 watch(hoveredDongName, (newDong, oldDong) => {
@@ -238,7 +244,7 @@ watch(hoveredDongName, (newDong, oldDong) => {
   }
 })
 
-const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_MAP_JS_KEY
+const KAKAO_JS_KEY = import.meta.env.VITE_KAKAO_JS_KEY
 
 onMounted(() => {
   loadKakaoMapScript()
@@ -250,6 +256,15 @@ watch(selectedDong, (newVal) => {
       initMap()
     })
   }
+})
+
+onBeforeUnmount(() => {
+  // 페이지를 벗어난 뒤에도 지도 인스턴스/폴리곤이 살아남아 계속 타일을
+  // 요청하는 것을 막는다 (컨테이너가 사라진 채로 계속 재시도하면
+  // 다른 페이지에서도 400 에러가 반복해서 찍히는 원인이 된다).
+  Object.values(dongPolygonMap).forEach((polygon) => polygon.setMap(null))
+  dongPolygonMap = {}
+  kakaoMapInstance = null
 })
 
 function loadKakaoMapScript() {
@@ -270,31 +285,34 @@ function loadKakaoMapScript() {
 }
 
 function initMap() {
-  const container = document.getElementById('map')
+  const container = mapContainer.value
   if (!container) return
 
   dongPolygonMap = {}
   originalPolygonColors = {}
   complementaryPolygonColors = {}
 
+  // 카카오맵 지도 레벨은 정수(1~14)만 지원한다. 소수점 레벨(8.45 등)을 넘기면
+  // 타일 요청 URL(.../latest/8.45/46/22.png)이 존재하지 않는 경로가 되어
+  // 타일 서버가 전부 400을 반환한다.
   const map = new window.kakao.maps.Map(container, {
     center: new window.kakao.maps.LatLng(37.5665, 126.978),
-    level: 8.55,
+    level: 8.5,
   })
+  kakaoMapInstance = map
 
   map.setZoomable(false)
   map.setDraggable(false)
 
+  // 카카오맵 이용약관상 로고/저작권 표기는 항상 노출되어야 하므로,
+  // DOM에서 임의로 지우지 않고 공식 API로 위치만 조정한다.
+  map.setCopyrightPosition(window.kakao.maps.CopyrightPosition.BOTTOMRIGHT, true)
+
   setTimeout(() => {
     map.relayout()
-    const unwantedElements = container.querySelectorAll(
-      'a[href*="kakao.com"], img[src*="kakao"], div[style*="position: absolute"][style*="left: 0px"][style*="bottom: 0px"], .r_layer, .dacr',
-    )
-    unwantedElements.forEach((el) => el.remove())
   }, 100)
 
-  fetch('/seoul_dong.geojson')
-    .then((response) => response.json())
+  loadSeoulGeojson()
     .then((geojson) => {
       if (!geojson || !geojson.features) return
 
@@ -475,7 +493,7 @@ function initMap() {
   <div v-else class="flex h-screen pt-15 overflow-hidden">
     <!-- 좌측 카카오맵 영역 -->
     <div class="flex-1 relative overflow-hidden bg-background">
-      <div id="map" class="w-full h-full"></div>
+      <div ref="mapContainer" class="w-full h-full"></div>
 
       <div
         class="absolute bottom-6 left-6 bg-white/90 backdrop-blur-sm rounded-2xl px-5 py-4 border border-border shadow-sm z-10"
@@ -515,9 +533,9 @@ function initMap() {
             class="flex items-center gap-3 bg-card border border-border rounded-xl px-4 py-3"
           >
             <Check :size="14" class="text-primary shrink-0" /><span
-            class="text-sm text-foreground"
-          >{{ item }}</span
-          >
+              class="text-sm text-foreground"
+              >{{ item }}</span
+            >
           </div>
         </div>
       </div>
@@ -536,14 +554,14 @@ function initMap() {
               <div v-if="districtAvgRating > 0" class="flex items-center gap-2 mt-1">
                 <StarDisplay :rating="districtAvgRating" :size="13" />
                 <span class="text-xs text-muted-foreground"
-                >{{ districtAvgRating.toFixed(1) }} ({{ districtReviews.length }}개 리뷰)</span
+                  >{{ districtAvgRating.toFixed(1) }} ({{ districtReviews.length }}개 리뷰)</span
                 >
               </div>
             </div>
             <span
               v-if="districtData"
               class="text-xs bg-secondary text-primary font-semibold px-3 py-1 rounded-full"
-            >평균 월세 {{ districtData.avgRent }}만원</span
+              >평균 월세 {{ districtData.avgRent }}만원</span
             >
           </div>
         </div>
@@ -595,7 +613,7 @@ function initMap() {
                       <template v-if="dongAvg(dong) > 0">
                         <StarDisplay :rating="dongAvg(dong)" :size="10" />
                         <span class="text-xs text-muted-foreground"
-                        >{{ dongAvg(dong).toFixed(1) }} · {{ dongReviews(dong).length }}개</span
+                          >{{ dongAvg(dong).toFixed(1) }} · {{ dongReviews(dong).length }}개</span
                         >
                       </template>
                       <span v-else class="text-xs text-muted-foreground">리뷰 없음</span>
