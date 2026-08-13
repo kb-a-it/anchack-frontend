@@ -11,6 +11,7 @@ const props = defineProps({
 const emit = defineEmits(["save"]);
 
 const isEditing = ref(false);
+const isSaving = ref(false);
 const nickname = ref("");
 const nicknameInput = ref(null);
 const errorMessage = ref("");
@@ -30,7 +31,7 @@ function cancelEditing() {
   isEditing.value = false;
 }
 
-function saveNickname() {
+async function saveNickname() {
   const trimmedNickname = nickname.value.trim();
 
   if (!trimmedNickname) {
@@ -43,12 +44,39 @@ function saveNickname() {
     return;
   }
 
-  emit("save", {
-    nickname: trimmedNickname,
-  });
+  if (trimmedNickname === props.userProfile.nickname) {
+    isEditing.value = false;
+    return;
+  }
 
+  const confirmed = window.confirm(
+    `닉네임을 "${trimmedNickname}"(으)로 변경하시겠습니까?`,
+  );
+
+  if (!confirmed) {
+    return;
+  }
+
+  isSaving.value = true;
   errorMessage.value = "";
-  isEditing.value = false;
+
+  try {
+    await new Promise((resolve, reject) => {
+      emit("save", {
+        nickname: trimmedNickname,
+        resolve,
+        reject,
+      });
+    });
+
+    isEditing.value = false;
+  } catch (error) {
+    errorMessage.value =
+      error.response?.data?.message ??
+      "닉네임 변경에 실패했습니다.";
+  } finally {
+    isSaving.value = false;
+  }
 }
 </script>
 
