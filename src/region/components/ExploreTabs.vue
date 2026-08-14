@@ -5,7 +5,7 @@ import ScoreBar from "../../common/components/ScoreBar.vue";
 import MiniBarChart from "../../common/components/MiniBarChart.vue";
 import NeighborhoodMap from "../../recommendation/components/detail/NeighborhoodMap.vue";
 import TabReview from "../../review/components/TabReview.vue";
-import { REVIEW_CATEGORIES } from "../../common/utils/mockData";
+import { REVIEW_CATEGORIES } from "../../review/constants.js";
 
 const props = defineProps({
   district: { type: String, required: true },

@@ -1,126 +1,424 @@
 <script setup>
-import { ref, computed } from "vue";
-import { X, Check } from "lucide-vue-next";
+import { computed, reactive, ref } from "vue";
+import { Check, X } from "lucide-vue-next";
 import StarInput from "../../common/components/StarInput.vue";
-import { REVIEW_CATEGORIES } from "../../common/utils/mockData";
+import { REVIEW_CATEGORIES, CATEGORY_LABEL_TO_CODE } from "../constants.js";
+import { createReview } from "../api/review.js";
 
 const props = defineProps({
-  district: { type: String, required: true },
-  dong: { type: String, required: true },
+  adminDongId: {
+    type: Number,
+    required: true,
+  },
+
+  adminDongName: {
+    type: String,
+    default: "",
+  },
 });
-const emit = defineEmits(["close", "submit"]);
+
+const emit = defineEmits([
+  "close",
+  "created",
+]);
 
 const overallRating = ref(0);
-const catRatings = ref({ 치안: 0, 교통: 0, 청결: 0, 분위기: 0, 소음: 0 });
 const content = ref("");
 const isAnonymous = ref(false);
-const nickname = ref("");
+
 const submitted = ref(false);
+const submitting = ref(false);
+const submitError = ref("");
 
-const canSubmit = computed(
-  () =>
-    overallRating.value > 0 &&
-    content.value.length >= 20 &&
-    Object.values(catRatings.value).every((v) => v > 0) &&
-    (!isAnonymous.value || nickname.value.trim().length > 0),
-);
+const catRatings = reactive({
+  소음: 0,
+  청결: 0,
+  안전: 0,
+  분위기: 0,
+  교통: 0,
+});
 
-function handleSubmit() {
-  const author = isAnonymous.value ? nickname.value.trim() : "본인";
-  emit("submit", {
-    id: Date.now(),
-    district: props.district,
-    dong: props.dong,
-    author,
-    date: new Date().toLocaleDateString("ko-KR").replace(/\. /g, ".").slice(0, -1),
-    overallRating: overallRating.value,
-    ratings: { ...catRatings.value },
-    content: content.value,
+/*
+ * 항목별 별점이 모두 입력되었는지 확인한다.
+ */
+const hasAllCategoryRatings = computed(() => {
+  return REVIEW_CATEGORIES.every((category) => {
+    const score = catRatings[category];
+
+    return score >= 1 && score <= 5;
   });
-  submitted.value = true;
-}
+});
+
+/*
+ * 리뷰 등록 버튼 활성화 조건
+ */
+const canSubmit = computed(() => {
+  return (
+    props.adminDongId != null &&
+    overallRating.value >= 1 &&
+    overallRating.value <= 5 &&
+    hasAllCategoryRatings.value &&
+    content.value.trim().length >= 20 &&
+    !submitting.value
+  );
+});
+
+/*
+ * 백엔드 DTO 형식에 맞는
+ * categoryScores 객체를 생성한다.
+ */
+const createCategoryScores = () => {
+  const categoryScores = {};
+
+  REVIEW_CATEGORIES.forEach((category) => {
+    const categoryCode =
+      CATEGORY_LABEL_TO_CODE[category];
+
+    categoryScores[categoryCode] =
+      catRatings[category];
+  });
+
+  return categoryScores;
+};
+
+/*
+ * 리뷰 등록 API 호출
+ */
+const handleSubmit = async () => {
+  if (!canSubmit.value) {
+    submitError.value =
+      "필수 입력 항목을 모두 확인해주세요.";
+    return;
+  }
+
+  const accessToken =
+    localStorage.getItem("accessToken");
+
+  if (!accessToken) {
+    submitError.value =
+      "로그인 후 리뷰를 작성할 수 있습니다.";
+    return;
+  }
+
+  submitting.value = true;
+  submitError.value = "";
+
+  const requestData = {
+    adminDongId: props.adminDongId,
+    overallRating: overallRating.value,
+    content: content.value.trim(),
+    anonymous: isAnonymous.value,
+    categoryScores: createCategoryScores(),
+  };
+
+  try {
+    const response = await createReview(requestData);
+
+    /*
+     * API 요청과 DB 저장이 성공한 경우에만
+     * 완료 화면을 표시한다.
+     */
+    submitted.value = true;
+
+    /*
+     * 부모 컴포넌트에 저장된 리뷰를 전달한다.
+     */
+    emit("created", response.data);
+  } catch (error) {
+    console.error(
+      "리뷰 등록 실패:",
+      error.response?.data || error
+    );
+
+    const status = error.response?.status;
+    const responseMessage =
+      error.response?.data?.message;
+
+    if (status === 401) {
+      submitError.value =
+        "로그인이 만료되었습니다. 다시 로그인해주세요.";
+    } else if (status === 400) {
+      submitError.value =
+        responseMessage ||
+        "리뷰 입력 내용을 확인해주세요.";
+    } else if (status === 404) {
+      submitError.value =
+        responseMessage ||
+        "선택한 행정동 정보를 찾을 수 없습니다.";
+    } else {
+      submitError.value =
+        responseMessage ||
+        "리뷰 등록에 실패했습니다. 잠시 후 다시 시도해주세요.";
+    }
+  } finally {
+    submitting.value = false;
+  }
+};
 </script>
 
 <template>
-  <div class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4" @click="emit('close')">
-    <div class="bg-card w-full max-w-[560px] max-h-[88vh] overflow-y-auto rounded-2xl shadow-2xl border border-border" @click.stop>
-      <div class="sticky top-0 bg-card border-b border-border px-6 py-4 flex items-center justify-between z-10">
-        <div>
-          <h2 class="font-bold text-foreground text-lg">{{ dong }} 리뷰 작성</h2>
-          <p class="text-xs text-muted-foreground">{{ district }} · 실제 거주 경험을 공유해주세요</p>
-        </div>
-        <button @click="emit('close')" class="p-1.5 rounded-lg hover:bg-muted"><X :size="18" class="text-muted-foreground" /></button>
-      </div>
+  <Teleport to="body">
+    <!-- 화면 전체 모달 영역 -->
+    <div
+      class="fixed inset-0 z-[9999]"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="review-modal-title"
+    >
+      <!-- 배경 오버레이 -->
+      <button
+        type="button"
+        class="absolute inset-0 h-full w-full cursor-default bg-black/40"
+        aria-label="리뷰 작성 창 닫기"
+        @click="emit('close')"
+      />
 
-      <div v-if="submitted" class="p-12 text-center">
-        <div class="w-16 h-16 bg-secondary rounded-full flex items-center justify-center mx-auto mb-4"><Check :size="28" class="text-primary" /></div>
-        <h3 class="text-xl font-bold text-foreground mb-2">리뷰가 등록되었어요!</h3>
-        <p class="text-sm text-muted-foreground mb-6">소중한 경험을 공유해 주셔서 감사해요.</p>
-        <button @click="emit('close')" class="bg-primary text-primary-foreground font-semibold px-8 py-3 rounded-full hover:bg-primary/90">닫기</button>
-      </div>
+      <!-- 리뷰 작성 패널 -->
+      <section
+        class="absolute inset-y-0 left-0 flex w-full max-w-[574px] flex-col overflow-hidden bg-background shadow-2xl"
+        @click.stop
+      >
+        <!-- 헤더 -->
+        <div
+          class="flex shrink-0 items-center justify-between border-b border-border bg-background px-6 py-5"
+        >
+          <div>
+            <h2
+              id="review-modal-title"
+              class="text-xl font-bold text-foreground"
+            >
+              리뷰 작성
+            </h2>
 
-      <div v-else class="p-6 space-y-6">
-        <div>
-          <label class="block text-sm font-semibold text-foreground mb-3">총 별점 <span class="text-red-500">*</span></label>
-          <div class="flex items-center gap-3">
-            <StarInput v-model="overallRating" :size="30" />
-            <span class="text-xl font-bold text-foreground">{{ overallRating > 0 ? `${overallRating}.0` : "—" }}</span>
+            <p
+              v-if="adminDongName"
+              class="mt-1 text-sm text-muted-foreground"
+            >
+              {{ adminDongName }}
+            </p>
           </div>
+
+          <button
+            type="button"
+            aria-label="닫기"
+            class="flex h-9 w-9 items-center justify-center rounded-full transition-colors hover:bg-muted"
+            @click="emit('close')"
+          >
+            <X
+              :size="20"
+              class="text-muted-foreground"
+            />
+          </button>
         </div>
 
-        <div>
-          <label class="block text-sm font-semibold text-foreground mb-3">항목별 별점 <span class="text-red-500">*</span></label>
-          <div class="bg-muted/40 rounded-xl p-4 space-y-3">
-            <div v-for="cat in REVIEW_CATEGORIES" :key="cat" class="flex items-center gap-4">
-              <span class="text-sm font-medium text-foreground w-16 flex-shrink-0">{{ cat }}</span>
-              <StarInput :model-value="catRatings[cat]" @update:model-value="(v) => (catRatings[cat] = v)" :size="20" />
-              <span class="text-sm font-semibold w-6">{{ catRatings[cat] || "—" }}</span>
+        <!-- 스크롤 가능한 내용 영역 -->
+        <div class="min-h-0 flex-1 overflow-y-auto overscroll-contain">
+          <!-- 등록 완료 화면 -->
+          <div
+            v-if="submitted"
+            class="flex min-h-full flex-col items-center justify-center p-12 text-center"
+          >
+            <div
+              class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-full bg-secondary"
+            >
+              <Check
+                :size="28"
+                class="text-primary"
+              />
             </div>
-          </div>
-        </div>
 
-        <div>
-          <label class="block text-sm font-semibold text-foreground mb-2">
-            내용 <span class="text-red-500">*</span> <span class="text-xs font-normal text-muted-foreground">(최소 20자)</span>
-          </label>
-          <textarea
-            v-model="content"
-            placeholder="이 동네에 살면서 느낀 점을 자유롭게 작성해주세요."
-            rows="4"
-            class="w-full bg-muted rounded-xl px-4 py-3 text-sm border-0 outline-none focus:ring-2 focus:ring-primary/30 resize-none"
-          />
-          <p :class="`text-xs mt-1 text-right ${content.length < 20 ? 'text-muted-foreground' : 'text-primary'}`">{{ content.length }}자</p>
-        </div>
+            <h3 class="mb-2 text-xl font-bold text-foreground">
+              리뷰가 등록되었어요!
+            </h3>
 
-        <div>
-          <div class="flex items-center justify-between mb-3">
-            <div>
-              <label class="text-sm font-semibold text-foreground">익명으로 작성</label>
-              <p class="text-xs text-muted-foreground mt-0.5">{{ isAnonymous ? "닉네임을 입력하면 해당 이름으로 게시돼요" : "본인 이름으로 게시돼요" }}</p>
-            </div>
+            <p class="mb-6 text-sm text-muted-foreground">
+              소중한 경험을 공유해 주셔서 감사해요.
+            </p>
+
             <button
               type="button"
-              @click="isAnonymous = !isAnonymous"
-              :class="`relative w-11 h-6 rounded-full transition-colors flex-shrink-0 ${isAnonymous ? 'bg-primary' : 'bg-muted-foreground/30'}`"
+              class="rounded-full bg-primary px-8 py-3 font-semibold text-primary-foreground transition-colors hover:bg-primary/90"
+              @click="emit('close')"
             >
-              <span :class="`absolute top-0.5 left-0.5 w-5 h-5 rounded-full bg-white shadow transition-transform ${isAnonymous ? 'translate-x-5' : 'translate-x-0'}`" />
+              닫기
             </button>
           </div>
-          <input
-            v-if="isAnonymous"
-            autofocus
-            type="text"
-            v-model="nickname"
-            placeholder="닉네임을 입력하세요 (필수)"
-            :class="`w-full bg-muted rounded-xl px-4 py-3 text-sm border-0 outline-none focus:ring-2 ${nickname.trim() ? 'focus:ring-primary/30' : 'focus:ring-red-300'}`"
-          />
-        </div>
 
-        <button :disabled="!canSubmit" @click="handleSubmit" class="w-full bg-primary text-primary-foreground font-bold py-3.5 rounded-xl hover:bg-primary/90 disabled:opacity-40 disabled:cursor-not-allowed shadow-sm">
-          리뷰 등록하기
-        </button>
-        <p class="text-xs text-muted-foreground text-center">허위 정보 작성 시 제재를 받을 수 있어요.</p>
-      </div>
+          <!-- 리뷰 작성 화면 -->
+          <div
+            v-else
+            class="space-y-6 p-6"
+          >
+            <!-- 총 별점 -->
+            <div>
+              <label
+                class="mb-3 block text-sm font-semibold text-foreground"
+              >
+                총 별점
+                <span class="text-red-500">*</span>
+              </label>
+
+              <div class="flex items-center gap-3">
+                <StarInput
+                  v-model="overallRating"
+                  :size="30"
+                />
+
+                <span class="text-xl font-bold text-foreground">
+                  {{
+                    overallRating > 0
+                      ? `${overallRating}.0`
+                      : "—"
+                  }}
+                </span>
+              </div>
+            </div>
+
+            <!-- 항목별 별점 -->
+            <div>
+              <label
+                class="mb-3 block text-sm font-semibold text-foreground"
+              >
+                항목별 별점
+                <span class="text-red-500">*</span>
+              </label>
+
+              <div class="space-y-3 rounded-xl bg-muted/40 p-4">
+                <div
+                  v-for="category in REVIEW_CATEGORIES"
+                  :key="category"
+                  class="flex items-center gap-4"
+                >
+                  <span
+                    class="w-16 flex-shrink-0 text-sm font-medium text-foreground"
+                  >
+                    {{ category }}
+                  </span>
+
+                  <StarInput
+                    :model-value="catRatings[category]"
+                    :size="20"
+                    @update:model-value="
+                      (value) => {
+                        catRatings[category] = value;
+                      }
+                    "
+                  />
+
+                  <span
+                    class="w-6 text-sm font-semibold text-foreground"
+                  >
+                    {{ catRatings[category] || "—" }}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            <!-- 리뷰 내용 -->
+            <div>
+              <label
+                class="mb-2 block text-sm font-semibold text-foreground"
+              >
+                내용
+                <span class="text-red-500">*</span>
+
+                <span
+                  class="text-xs font-normal text-muted-foreground"
+                >
+                  (최소 20자)
+                </span>
+              </label>
+
+              <textarea
+                v-model="content"
+                maxlength="500"
+                placeholder="이 동네에 살면서 느낀 점을 자유롭게 작성해주세요."
+                rows="5"
+                class="w-full resize-none rounded-xl border-0 bg-muted px-4 py-3 text-sm text-foreground outline-none placeholder:text-muted-foreground focus:ring-2 focus:ring-primary/30"
+              />
+
+              <p
+                :class="[
+                  'mt-1 text-right text-xs',
+                  content.trim().length < 20
+                    ? 'text-muted-foreground'
+                    : 'text-primary',
+                ]"
+              >
+                {{ content.length }}/500자
+              </p>
+            </div>
+
+            <!-- 익명 작성 -->
+            <div class="flex items-center justify-between">
+              <div>
+                <label class="text-sm font-semibold text-foreground">
+                  익명으로 작성
+                </label>
+
+                <p class="mt-0.5 text-xs text-muted-foreground">
+                  {{
+                    isAnonymous
+                      ? "작성자 정보가 익명으로 표시돼요"
+                      : "로그인한 사용자의 닉네임으로 게시돼요"
+                  }}
+                </p>
+              </div>
+
+              <button
+                type="button"
+                role="switch"
+                :aria-checked="isAnonymous"
+                :aria-label="
+                  isAnonymous
+                    ? '익명 작성 끄기'
+                    : '익명 작성 켜기'
+                "
+                :class="[
+                  'relative h-6 w-11 flex-shrink-0 rounded-full transition-colors',
+                  isAnonymous
+                    ? 'bg-primary'
+                    : 'bg-muted-foreground/30',
+                ]"
+                @click="isAnonymous = !isAnonymous"
+              >
+                <span
+                  :class="[
+                    'absolute left-0.5 top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
+                    isAnonymous
+                      ? 'translate-x-5'
+                      : 'translate-x-0',
+                  ]"
+                />
+              </button>
+            </div>
+
+            <!-- 등록 오류 메시지 -->
+            <div
+              v-if="submitError"
+              class="rounded-xl border border-red-200 bg-red-50 px-4 py-3"
+            >
+              <p class="text-sm text-red-600">
+                {{ submitError }}
+              </p>
+            </div>
+
+            <!-- 등록 버튼 -->
+            <button
+              type="button"
+              :disabled="!canSubmit || submitting"
+              class="w-full rounded-xl bg-primary py-3.5 font-bold text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-40"
+              @click="handleSubmit"
+            >
+              {{ submitting ? "등록 중..." : "리뷰 등록하기" }}
+            </button>
+
+            <p class="pb-2 text-center text-xs text-muted-foreground">
+              허위 정보 작성 시 제재를 받을 수 있어요.
+            </p>
+          </div>
+        </div>
+      </section>
     </div>
-  </div>
+  </Teleport>
 </template>

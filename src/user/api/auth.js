@@ -16,7 +16,7 @@ const api = axios.create({
 
 // JWT 없이 호출할 수 있는 API
 const publicPaths = [
-  "/api/auth/kakao/callback",
+  "/auth/kakao/callback",
 ];
 
 api.interceptors.request.use(
@@ -55,7 +55,7 @@ api.interceptors.response.use(
 
     // 로그인 요청 자체의 401은 토큰 만료 처리에서 제외
     const isLoginRequest =
-      requestUrl === "/api/auth/kakao/callback";
+      requestUrl === "/auth/kakao/callback";
 
     if (status === 401 && !isLoginRequest) {
       localStorage.removeItem("accessToken");
@@ -68,20 +68,20 @@ api.interceptors.response.use(
 
 // 카카오 인가 코드를 백엔드로 전달
 export function loginWithKakao(code) {
-  return api.post("/api/auth/kakao/callback", {
+  return api.post("/auth/kakao/callback", {
     code,
   });
 }
 
 // 현재 로그인한 사용자 정보 조회
 export function fetchMe() {
-  return api.get("/api/auth/me");
+  return api.get("/auth/me");
 }
 
 // 로그아웃
 export async function logout() {
   try {
-    return await api.post("/api/auth/logout");
+    return await api.post("/auth/logout");
   } finally {
     // 서버 요청 성공 여부와 관계없이 프론트 JWT 제거
     localStorage.removeItem("accessToken");
