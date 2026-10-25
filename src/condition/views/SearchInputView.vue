@@ -52,7 +52,7 @@ function startSearch() {
   nbhd.resetCompare();
   showFunnel.value = false;
 
-  // 디자인 캡처 모드(npm run dev + VITE_DESIGN_MODE=true)에서는 아래 submit/recompute가
+  // 디자인 캡처 모드(Design Preview, common/dev/designPreview.js)에서는 아래 submit/recompute가
   // 실제 서버·AI를 호출하지 않고 common/dev/designPreviewMocks.js의 목 응답을 받는다
   // (common/api/axios.js의 프리뷰 어댑터). 그래서 로딩 연출 → 결과 이동 흐름은 그대로 유지된다.
   const recomputeConditionId = route.query.recomputeConditionId;
