@@ -17,6 +17,8 @@ export default defineConfig({
     // 고정한다. Vercel 밖이면 빈 문자열. .env 파일 값보다 우선하므로 수동 설정으로
     // Production에서 디자인 모드를 켤 수 없다(src/common/dev/designPreview.js 참고).
     'import.meta.env.VITE_VERCEL_ENV': JSON.stringify(process.env.VERCEL_ENV ?? ''),
+    // Production 디자인 모드 허용 브랜치 판별용(빌드한 Git 브랜치). Vercel 밖이면 빈 문자열.
+    'import.meta.env.VITE_VERCEL_GIT_COMMIT_REF': JSON.stringify(process.env.VERCEL_GIT_COMMIT_REF ?? ''),
   },
   resolve: {
     alias: {

@@ -15,8 +15,7 @@
  *
  * 관심 동네·작성한 리뷰·추가로 조회한 동은 브라우저 localStorage(DESIGN_PREVIEW_STORAGE_KEY)에
  * 저장해 새로고침 후에도 유지한다. 초기화하려면 개발자 도구에서 그 키를 지우면 된다.
- * 목에 없는 GET은 실제 서버로 보내고, 목에 없는 쓰기 요청(POST/PUT/PATCH/DELETE)은
- * 실제 서버로 보내지 않고 오류로 차단한다.
+ * 목에 없는 요청(GET 포함)은 실제 서버로 보내지 않고 오류로 차단한다.
  */
 import { DESIGN_PREVIEW_CONDITION_ID, DESIGN_PREVIEW_TOKEN } from "./designPreview";
 import { DONG_DATA, INITIAL_REVIEWS } from "../utils/mockData";
@@ -375,8 +374,7 @@ function nowIso() {
  * 요청 하나에 대한 목 응답을 찾는다.
  * - { data, status?, delay? }: 목 응답
  * - { error: { status, data } }: 목 오류 응답
- * - null: 목 대상이 아님 -> 호출부(installDesignPreviewAdapter)가 GET은 실제 서버로 보내고,
- *   쓰기 요청은 차단한다.
+ * - null: 목 대상이 아님 -> 호출부(installDesignPreviewAdapter)가 실제 서버로 보내지 않고 차단한다.
  */
 export function resolveDesignPreviewMock(config) {
   const method = (config.method || "get").toLowerCase();

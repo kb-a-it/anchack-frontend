@@ -4,18 +4,30 @@
  * VITE_DESIGN_MODE=true 이면서 아래 환경 중 하나일 때만 켜진다(자세한 내용은 README).
  *   - 로컬 개발 서버(`npm run dev`, import.meta.env.DEV)
  *   - Vercel Preview 배포(빌드 시 VERCEL_ENV=preview)
- * Vercel Production 배포나 Vercel 밖에서 만든 프로덕션 빌드는 VITE_DESIGN_MODE=true로
- * 잘못 설정돼도 꺼진다. VITE_VERCEL_ENV는 vite.config.js가 빌드 시점의 VERCEL_ENV로
- * 고정해 넣는 값이라 .env 파일이나 대시보드 변수로 덮어쓸 수 없다. 꺼지는 빌드에서는
- * 조건이 false 상수가 되어 Mock 모듈(dynamic import 포함)이 번들에서 제거된다.
+ *   - Vercel Production 배포 중 아래를 모두 만족하는 경우(임시 디자인 검토용 opt-in)
+ *       · 빌드 시 VERCEL_ENV=production
+ *       · 빌드한 Git 브랜치(VERCEL_GIT_COMMIT_REF)가 DESIGN_PREVIEW_PRODUCTION_BRANCH
+ *       · VITE_DESIGN_MODE_ALLOW_PRODUCTION=true 를 별도로 설정
+ * 그 외(dev 등 다른 브랜치의 Production, Vercel 밖 프로덕션 빌드)는 VITE_DESIGN_MODE=true로
+ * 잘못 설정돼도 꺼진다. VITE_VERCEL_ENV / VITE_VERCEL_GIT_COMMIT_REF는 vite.config.js가
+ * 빌드 시점의 Vercel 시스템 변수로 고정해 넣는 값이라 .env 파일이나 대시보드 변수로
+ * 덮어쓸 수 없다. 꺼지는 빌드에서는 조건이 false 상수가 되어 Mock 모듈이 번들에서 제거된다.
  * - 켜져 있으면 installDesignPreviewAdapter()를 적용한 axios 인스턴스(공용 api, 인증 api)가
- *   designPreviewMocks.js의 목 응답을 받는다. 목에 없는 GET은 실제 서버로 가고,
- *   목에 없는 쓰기 요청은 실제 서버로 보내지 않고 차단한다.
+ *   designPreviewMocks.js의 목 응답을 받고, 목에 없는 요청(조회 포함)은 실제 서버로 보내지
+ *   않고 차단한다.
  */
-import axios, { AxiosError } from "axios";
+import { AxiosError } from "axios";
+
+// Production에서 디자인 모드를 허용하는 유일한 브랜치(임시 디자인 검토용 배포)
+const DESIGN_PREVIEW_PRODUCTION_BRANCH = "feat/design-preview";
 
 const isDesignModeRequested = import.meta.env.VITE_DESIGN_MODE === "true";
-const isDesignModeAllowedEnv = import.meta.env.DEV || import.meta.env.VITE_VERCEL_ENV === "preview";
+const isDesignModeAllowedInProduction =
+  import.meta.env.VITE_VERCEL_ENV === "production" &&
+  import.meta.env.VITE_VERCEL_GIT_COMMIT_REF === DESIGN_PREVIEW_PRODUCTION_BRANCH &&
+  import.meta.env.VITE_DESIGN_MODE_ALLOW_PRODUCTION === "true";
+const isDesignModeAllowedEnv =
+  import.meta.env.DEV || import.meta.env.VITE_VERCEL_ENV === "preview" || isDesignModeAllowedInProduction;
 
 export const isDesignPreview = isDesignModeRequested && isDesignModeAllowedEnv;
 
@@ -33,7 +45,6 @@ export const DESIGN_PREVIEW_TOKEN = "design-preview-token";
 export function installDesignPreviewAdapter(instance) {
   if (!isDesignPreview) return;
 
-  const networkAdapter = axios.getAdapter(instance.defaults.adapter);
   instance.defaults.adapter = async (config) => {
     const { resolveDesignPreviewMock, buildMockResponse } = await import("./designPreviewMocks.js");
     const mock = resolveDesignPreviewMock(config);
@@ -48,15 +59,12 @@ export function installDesignPreviewAdapter(instance) {
       return buildMockResponse(config, mock);
     }
 
-    // 목에 없는 쓰기 요청은 실제 서버로 보내지 않는다(로그인·저장·리뷰 등 데이터 변경 방지).
-    if ((config.method || "get").toLowerCase() !== "get") {
-      console.warn(`[design-preview] blocked ${label}`);
-      const response = {
-        data: { success: false, data: null, error: { message: "Design Preview 모드에서는 서버로 보내지 않는 요청이에요." } },
-        status: 503, statusText: "", headers: {}, config, request: {},
-      };
-      throw new AxiosError(`[design-preview] blocked ${label}`, AxiosError.ERR_BAD_RESPONSE, config, null, response);
-    }
-    return networkAdapter(config);
+    // 목에 없는 요청은 조회·쓰기 모두 실제 서버로 보내지 않는다(백엔드 호출 0건 보장).
+    console.warn(`[design-preview] blocked ${label}`);
+    const response = {
+      data: { success: false, data: null, error: { message: "Design Preview 모드에서는 서버로 보내지 않는 요청이에요." } },
+      status: 503, statusText: "", headers: {}, config, request: {},
+    };
+    throw new AxiosError(`[design-preview] blocked ${label}`, AxiosError.ERR_BAD_RESPONSE, config, null, response);
   };
 }
