@@ -1,4 +1,5 @@
 import axios from "axios";
+import { installDesignPreviewAdapter } from "@/common/dev/designPreview";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 
@@ -13,6 +14,10 @@ const api = axios.create({
   // 백엔드에서 세션도 함께 사용하지 않는다면 생략 가능
   withCredentials: true,
 });
+
+// [디자인 캡처 전용] Design Preview 모드에서는 카카오 로그인·사용자 조회·로그아웃을
+// Mock 응답으로 대체한다(common/dev/designPreview.js). 그 외에는 아무 동작도 하지 않는다.
+installDesignPreviewAdapter(api);
 
 // JWT 없이 호출할 수 있는 API
 const publicPaths = [

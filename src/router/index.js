@@ -108,6 +108,18 @@ const router = createRouter({
 })
 
 router.beforeEach(async (to) => {
+  // 로컬 디자인 작업에서는 라우터 인증 검사 생략
+  if (import.meta.env.DEV &&
+      import.meta.env.VITE_DESIGN_MODE === 'true') {
+    // 검사는 건너뛰되, Preview 로그인(Mock 토큰)으로 들어온 경우 새로고침 후에도 로그인
+    // 상태가 유지되도록 사용자 정보만 복구한다(/auth/me는 Mock 응답).
+    const authStore = useAuthStore()
+    if (localStorage.getItem('accessToken') && !authStore.isLoggedIn) {
+      await authStore.loadUser().catch(() => {})
+    }
+    return true
+  }
+
   const authStore = useAuthStore()
 
   if (localStorage.getItem('accessToken') && !authStore.isLoggedIn) {

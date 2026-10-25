@@ -1,3 +1,5 @@
+import { isDesignPreview } from "@/common/dev/designPreview";
+
 const KAKAO_AUTHORIZE_URL = "https://kauth.kakao.com/oauth/authorize";
 const KAKAO_OAUTH_STATE_KEY = "kakaoOAuthState";
 
@@ -43,7 +45,11 @@ export function getKakaoAuthorizeUrl(state) {
 export function startKakaoOAuth() {
   try {
     const state = createOAuthState();
-    const authorizeUrl = getKakaoAuthorizeUrl(state);
+    // [디자인 캡처 전용] Design Preview 모드에서는 카카오로 이동하지 않고 기존 콜백 화면으로
+    // 바로 보내 Mock 사용자로 로그인한다(콜백의 state 검증·저장 흐름은 그대로 탄다).
+    const authorizeUrl = isDesignPreview
+      ? `/auth/kakao/callback?code=design-preview&state=${state}`
+      : getKakaoAuthorizeUrl(state);
 
     sessionStorage.setItem(KAKAO_OAUTH_STATE_KEY, state);
     window.location.assign(authorizeUrl);

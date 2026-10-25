@@ -47,9 +47,14 @@ function submit() {
 // /search/loading?recomputeConditionId=1 형태로 여기 들어온다 - 새 조건으로 검색을
 // 다시 돌리는 게 아니라 그 conditionId로 재계산을 요청한다. OpenAI 이유 생성을 다시
 // 거칠 수 있어(submit()과 동일하게) "찾고 있어요" 온보딩 로딩 화면을 그대로 거친다.
+
 function startSearch() {
   nbhd.resetCompare();
   showFunnel.value = false;
+
+  // 디자인 캡처 모드(npm run dev + VITE_DESIGN_MODE=true)에서는 아래 submit/recompute가
+  // 실제 서버·AI를 호출하지 않고 common/dev/designPreviewMocks.js의 목 응답을 받는다
+  // (common/api/axios.js의 프리뷰 어댑터). 그래서 로딩 연출 → 결과 이동 흐름은 그대로 유지된다.
   const recomputeConditionId = route.query.recomputeConditionId;
   if (recomputeConditionId) {
     recommendation.recompute(Number(recomputeConditionId));
@@ -57,6 +62,7 @@ function startSearch() {
     recommendation.submit(search.appState);
   }
 }
+
 watch(isLoading, (loading) => {
   if (loading) startSearch();
 }, { immediate: true });

@@ -1,9 +1,14 @@
 import axios from "axios";
+import { installDesignPreviewAdapter } from "../dev/designPreview";
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api",
   timeout: 10000,
 });
+
+// [디자인 캡처 전용] npm run dev + VITE_DESIGN_MODE=true 일 때만 Mock 응답으로 대체한다
+// (common/dev/designPreview.js 참고). 프로덕션 빌드에서는 아무 동작도 하지 않는다.
+installDesignPreviewAdapter(api);
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem("accessToken");

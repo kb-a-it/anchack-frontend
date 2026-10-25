@@ -2,6 +2,7 @@ import { defineStore } from "pinia";
 import { submitUserConditions, getConditionRecommendations, recomputeUserCondition } from "../../condition/api/userConditions";
 import { buildUserConditionPayload } from "../../condition/utils/conditionCodes";
 import { getAdminDongsBatch } from "../../region/api/neighborhood";
+import { isDesignPreview, DESIGN_PREVIEW_CONDITION_ID } from "../../common/dev/designPreview";
 
 // 추천 결과는 Pinia 메모리에만 있으면 새로고침 한 번에 날아가서(검색 결과 0건으로
 // 보임) sessionStorage에 같이 백업해둔다. 브라우저를 새로 열면 사라지는 게 맞는
@@ -11,7 +12,14 @@ const STORAGE_KEY = "recommendation-state";
 function loadPersisted() {
   try {
     const raw = sessionStorage.getItem(STORAGE_KEY);
-    return raw ? JSON.parse(raw) : null;
+    const parsed = raw ? JSON.parse(raw) : null;
+    // 디자인 프리뷰 모드에서 저장된 목 결과가 프리뷰를 끈 뒤에도 남아 실제 결과처럼
+    // 보이지 않도록 버린다.
+    if (parsed?.conditionId === DESIGN_PREVIEW_CONDITION_ID && !isDesignPreview) {
+      sessionStorage.removeItem(STORAGE_KEY);
+      return null;
+    }
+    return parsed;
   } catch {
     return null;
   }
